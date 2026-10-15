@@ -1,38 +1,44 @@
 # PokéSurvivor Android — Port by JavCombita
 
-Port Android empaquetado del proyecto web original:
-https://github.com/JPTER78/pokesurvivor
+Port Android del juego web original: https://github.com/JPTER78/pokesurvivor
+
+## Modos de juego
+
+Al abrir la aplicación, elige uno de los dos modos:
+
+- **Online:** abre https://pokesurvivor.com dentro de la aplicación. Requiere conexión y permite utilizar las funciones online que ofrezca la versión alojada, como cuentas, guardado en la nube, ranking o cooperativo cuando estén disponibles/configurados.
+- **Offline:** carga la copia del juego incluida en el APK. No requiere conexión para jugar en solitario. El progreso local de este modo se guarda en el almacenamiento web de la aplicación.
+- **Cambio automático:** si eliges Online y la página no puede cargarse por un error de conexión, la aplicación intenta abrir la copia Offline.
+
+Los datos guardados en el modo online y en el modo offline pueden ser independientes: el almacenamiento local de cada origen no se sincroniza automáticamente. Las funciones que dependan de servidores no estarán disponibles offline.
 
 ## Créditos
+
 - Juego original: JPTER78 — https://github.com/JPTER78/pokesurvivor
 - Port Android: JavCombita
 
-Este proyecto es un contenedor Android con WebView que carga una copia local del juego original. No es una reescritura del motor en Kotlin. El juego se ejecuta dentro de la aplicación y los archivos web se incluyen en los assets del APK.
+El proyecto utiliza un WebView Android; el motor del juego sigue siendo HTML/CSS/JavaScript y Canvas 2D. Revisa las licencias antes de redistribuirlo. El código del repositorio original se indica bajo MIT, pero los sprites, la fuente y las marcas tienen condiciones propias. Conserva `LICENSE` y `CREDITS.md` del original.
 
-Revisa las licencias del proyecto original antes de redistribuirlo. El repositorio original indica que el código está bajo MIT, pero los sprites, fuentes y marcas tienen condiciones distintas. Conserva `LICENSE` y `CREDITS.md` del original.
+## Compilar APK con GitHub Actions
 
-## Compilar APK
-La forma más sencilla es usar GitHub Actions:
+1. Sube el contenido de esta carpeta a un repositorio de GitHub.
+2. Abre **Actions** y ejecuta **Build Android APK** (o haz push a `main`/`master`).
+3. Descarga el artefacto `PokeSurvivor-Android-debug-apk` cuando termine el workflow.
 
-1. Crea un repositorio nuevo en GitHub y sube el contenido de esta carpeta.
-2. Abre la pestaña **Actions** y permite ejecutar workflows si GitHub lo solicita.
-3. Ejecuta **Build Android APK** desde `Actions` → `Build Android APK` → `Run workflow`.
-4. Descarga el artefacto `PokeSurvivor-Android-debug-apk` al terminar.
+El workflow descarga la versión actual del repositorio original durante la compilación y la empaqueta para el modo offline. El modo online utiliza la web pública y requiere conexión.
 
-El workflow descarga el código fuente público del proyecto original durante la compilación y lo copia dentro de los assets. El APK resultante no necesita descargar el juego al iniciarse. Las funciones que dependan de servicios online del juego original seguirán necesitando conexión.
+## Compilar localmente
 
-## Requisitos para compilar localmente
-- JDK 17
-- Android SDK
-- Gradle 8.7
+Requisitos: JDK 17, Android SDK y Gradle compatible con el proyecto.
 
-Desde la raíz del proyecto, coloca una copia del repositorio original en `game/` (debe contener `index.html`) y ejecuta:
+Coloca una copia del repositorio original dentro de `app/src/main/assets/game/` (debe incluir `index.html`) y ejecuta:
 
 ```bash
 gradle assembleDebug
 ```
 
-El APK se genera en `app/build/outputs/apk/debug/app-debug.apk`.
+APK: `app/build/outputs/apk/debug/app-debug.apk`.
 
 ## Estado
-Plantilla inicial de port y compilación. Debe compilarse y probarse en un dispositivo Android real; todavía no se ha validado el APK en un dispositivo.
+
+El proyecto está preparado para compilar ambos modos. Después de compilar, prueba Online con conexión y Offline con el dispositivo en modo avión para confirmar el comportamiento en tu dispositivo.
