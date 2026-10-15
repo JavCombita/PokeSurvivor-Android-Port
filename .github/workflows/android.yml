@@ -36,25 +36,23 @@ jobs:
           test -f "$SRC/index.html"
           cp -a "$SRC"/. app/src/main/assets/game/
 
-      - name: Prepare official cloud sync for Android WebView
+      - name: Configure local Firebase SDK and Android origin
+        env:
+          FIREBASE_CONFIG_JSON: ${{ secrets.FIREBASE_CONFIG_JSON }}
         run: |
           mkdir -p app/src/main/assets/game/js/vendor/firebase/13.0.0
           for file in firebase-app-compat.js firebase-auth-compat.js firebase-firestore-compat.js firebase-database-compat.js; do
             curl -fLsS "https://www.gstatic.com/firebasejs/13.0.0/$file" \
               -o "app/src/main/assets/game/js/vendor/firebase/13.0.0/$file"
           done
-          python3 - <<'PYCODE'
-          import re
+          python3 - <<'PY'
+          import json, os, re
           from pathlib import Path
           game = Path('app/src/main/assets/game')
           db = game / 'js/core/db.js'
-          cfg = game / 'js/core/firebase-config.js'
           source = db.read_text(encoding='utf-8')
-          config = cfg.read_text(encoding='utf-8')
-          if 'G.FIREBASE_CONFIG = null' in config or 'G.FIREBASE_CONFIG = {' not in config:
-              raise SystemExit('El repositorio original no incluye una configuración Firebase activa; se cancela para no compilar sin sincronización oficial.')
           source, sdk_count = re.subn(
-              r"const SDK = ['\"]https://www\.gstatic\.com/firebasejs/13\.0\.0/['\"];",
+              r"const SDK = ['\"][^'\"]*firebasejs/13\.0\.0/['\"];",
               "const SDK = 'js/vendor/firebase/13.0.0/';",
               source, count=1)
           if sdk_count != 1:
@@ -66,8 +64,20 @@ jobs:
           if host_count != 1:
               raise SystemExit('No se encontró la lista de dominios permitidos en db.js')
           db.write_text(source, encoding='utf-8')
-          print('Configuración oficial de PokéSurvivor conservada; SDK local y origen Android preparados.')
-          PYCODE
+
+          raw = os.environ.get('FIREBASE_CONFIG_JSON', '').strip()
+          config_file = game / 'js/core/firebase-config.js'
+          if raw:
+              config = json.loads(raw)
+              for field in ('apiKey', 'authDomain', 'projectId', 'appId'):
+                  if not config.get(field):
+                      raise SystemExit('FIREBASE_CONFIG_JSON debe incluir ' + field)
+              config_file.write_text('G.FIREBASE_CONFIG = ' + json.dumps(config, ensure_ascii=False) + ';\n', encoding='utf-8')
+              print('Configuración Firebase propia aplicada: la sincronización en nube está habilitada.')
+          else:
+              config_file.write_text('G.FIREBASE_CONFIG = null;\n', encoding='utf-8')
+              print('FIREBASE_CONFIG_JSON no está configurado: el juego funcionará localmente, sin sincronización en nube.')
+          PY
 
       - name: Build debug APK
         run: gradle --no-daemon assembleDebug
