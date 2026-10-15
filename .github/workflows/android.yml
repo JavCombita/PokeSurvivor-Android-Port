@@ -1,0 +1,48 @@
+name: Build Android APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main, master ]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Android port
+        uses: actions/checkout@v4
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Download original game source
+        run: |
+          mkdir -p app/src/main/assets/game
+          curl -fL https://codeload.github.com/JPTER78/pokesurvivor/zip/refs/heads/main -o /tmp/original.zip
+          mkdir -p /tmp/original
+          unzip -q /tmp/original.zip -d /tmp/original
+          SRC="$(find /tmp/original -mindepth 1 -maxdepth 1 -type d | head -n 1)"
+          test -f "$SRC/index.html"
+          cp -a "$SRC"/. app/src/main/assets/game/
+          test -f app/src/main/assets/game/LICENSE || true
+          test -f app/src/main/assets/game/CREDITS.md || true
+
+      - name: Build debug APK
+        run: |
+          gradle --no-daemon assembleDebug
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: PokeSurvivor-Android-debug-apk
+          path: app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
