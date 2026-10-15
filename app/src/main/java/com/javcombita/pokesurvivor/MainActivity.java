@@ -1,26 +1,26 @@
 package com.javcombita.pokesurvivor;
 
 import android.app.Activity;
-import android.app.AlertDialog;
+import android.graphics.Bitmap;
+import android.net.Uri;
 import android.os.Bundle;
 import android.view.View;
 import android.view.Window;
 import android.view.WindowManager;
 import android.webkit.WebChromeClient;
-import android.webkit.WebResourceError;
 import android.webkit.WebResourceRequest;
+import android.webkit.WebResourceResponse;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.Toast;
-import android.graphics.Bitmap;
+
+import androidx.webkit.WebViewAssetLoader;
 
 public class MainActivity extends Activity {
-    private static final String ONLINE_URL = "https://pokesurvivor.com";
-    private static final String OFFLINE_URL = "file:///android_asset/game/index.html";
+    private static final String GAME_URL = "https://appassets.androidplatform.net/assets/game/index.html";
     private WebView webView;
-    private boolean onlineMode;
-    private boolean fallbackUsed;
+    private WebViewAssetLoader assetLoader;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -32,6 +32,10 @@ public class MainActivity extends Activity {
         );
         applyImmersiveMode();
 
+        assetLoader = new WebViewAssetLoader.Builder()
+            .addPathHandler("/assets/", new WebViewAssetLoader.AssetsPathHandler(this))
+            .build();
+
         webView = new WebView(this);
         setContentView(webView);
 
@@ -40,8 +44,8 @@ public class MainActivity extends Activity {
         settings.setDomStorageEnabled(true);
         settings.setDatabaseEnabled(true);
         settings.setMediaPlaybackRequiresUserGesture(false);
-        settings.setAllowFileAccess(true);
-        settings.setAllowContentAccess(true);
+        settings.setAllowFileAccess(false);
+        settings.setAllowContentAccess(false);
         settings.setSupportZoom(false);
         settings.setBuiltInZoomControls(false);
         settings.setDisplayZoomControls(false);
@@ -50,61 +54,43 @@ public class MainActivity extends Activity {
         webView.setWebChromeClient(new WebChromeClient());
         webView.setWebViewClient(new WebViewClient() {
             @Override
+            public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
+                return assetLoader.shouldInterceptRequest(request.getUrl());
+            }
+
+            @Override
             public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
-                String scheme = request.getUrl().getScheme();
-                return !("file".equals(scheme) || "https".equals(scheme) || "http".equals(scheme));
+                Uri uri = request.getUrl();
+                String scheme = uri.getScheme();
+                if ("https".equals(scheme) && "appassets.androidplatform.net".equals(uri.getHost())) {
+                    return false;
+                }
+                if ("https".equals(scheme) || "http".equals(scheme)) {
+                    return false;
+                }
+                return true;
+            }
+
+            @Override
+            public void onReceivedError(WebView view, WebResourceRequest request, android.webkit.WebResourceError error) {
+                super.onReceivedError(view, request, error);
+                if (request.isForMainFrame()) {
+                    Toast.makeText(MainActivity.this,
+                        "No se pudo abrir el juego incluido en la aplicación.", Toast.LENGTH_LONG).show();
+                }
             }
 
             @Override
             public void onPageStarted(WebView view, String url, Bitmap favicon) {
                 super.onPageStarted(view, url, favicon);
             }
-
-            @Override
-            public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError error) {
-                super.onReceivedError(view, request, error);
-                if (onlineMode && !fallbackUsed && request.isForMainFrame()) {
-                    fallbackUsed = true;
-                    onlineMode = false;
-                    runOnUiThread(() -> {
-                        Toast.makeText(MainActivity.this,
-                            "No se pudo conectar. Se abrirá el modo offline.", Toast.LENGTH_LONG).show();
-                        webView.loadUrl(OFFLINE_URL);
-                    });
-                }
-            }
         });
 
-        if (savedInstanceState != null) {
-            onlineMode = savedInstanceState.getBoolean("onlineMode", false);
-            fallbackUsed = savedInstanceState.getBoolean("fallbackUsed", false);
-            webView.restoreState(savedInstanceState);
-            if (webView.getUrl() == null) loadSelectedMode();
+        if (savedInstanceState != null && webView.restoreState(savedInstanceState) != null) {
+            // Mantener la pantalla y navegación del juego al recrear la actividad.
         } else {
-            showModeChooser();
+            webView.loadUrl(GAME_URL);
         }
-    }
-
-    private void showModeChooser() {
-        new AlertDialog.Builder(this)
-            .setTitle("PokéSurvivor")
-            .setMessage("¿Cómo quieres jugar?")
-            .setCancelable(false)
-            .setPositiveButton("Online", (dialog, which) -> {
-                onlineMode = true;
-                fallbackUsed = false;
-                loadSelectedMode();
-            })
-            .setNegativeButton("Offline", (dialog, which) -> {
-                onlineMode = false;
-                fallbackUsed = false;
-                loadSelectedMode();
-            })
-            .show();
-    }
-
-    private void loadSelectedMode() {
-        webView.loadUrl(onlineMode ? ONLINE_URL : OFFLINE_URL);
     }
 
     private void applyImmersiveMode() {
@@ -120,8 +106,6 @@ public class MainActivity extends Activity {
 
     @Override
     protected void onSaveInstanceState(Bundle outState) {
-        outState.putBoolean("onlineMode", onlineMode);
-        outState.putBoolean("fallbackUsed", fallbackUsed);
         if (webView != null) webView.saveState(outState);
         super.onSaveInstanceState(outState);
     }

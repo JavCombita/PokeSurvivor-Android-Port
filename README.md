@@ -1,44 +1,44 @@
 # PokéSurvivor Android — Port by JavCombita
 
-Port Android del juego web original: https://github.com/JPTER78/pokesurvivor
+Port Android del juego original de JPTER78: https://github.com/JPTER78/pokesurvivor
 
-## Modos de juego
+## Integración con el juego original
 
-Al abrir la aplicación, elige uno de los dos modos:
+La aplicación abre directamente los archivos originales dentro de un WebView seguro. No añade pantallas de inicio ni menús Android independientes: el acceso, registro, ajustes, pausa y opciones son los del juego.
 
-- **Online:** abre https://pokesurvivor.com dentro de la aplicación. Requiere conexión y permite utilizar las funciones online que ofrezca la versión alojada, como cuentas, guardado en la nube, ranking o cooperativo cuando estén disponibles/configurados.
-- **Offline:** carga la copia del juego incluida en el APK. No requiere conexión para jugar en solitario. El progreso local de este modo se guarda en el almacenamiento web de la aplicación.
-- **Cambio automático:** si eliges Online y la página no puede cargarse por un error de conexión, la aplicación intenta abrir la copia Offline.
+## Cuenta oficial y sincronización
 
-Los datos guardados en el modo online y en el modo offline pueden ser independientes: el almacenamiento local de cada origen no se sincroniza automáticamente. Las funciones que dependan de servidores no estarán disponibles offline.
+Esta compilación conserva la configuración Firebase pública incluida en el repositorio original de PokéSurvivor. No crea un proyecto Firebase propio ni cambia el identificador del proyecto, por lo que utiliza el backend oficial autorizado por el autor.
+
+- Inicia sesión o crea una cuenta desde el menú original del juego para usar la nube.
+- La partida se guarda localmente para poder continuar sin conexión.
+- Al recuperar la conexión, el juego vuelve a sincronizar y aplica la lógica de fusión original.
+- La configuración Firebase y las reglas de seguridad son las del proyecto original; no se incluyen credenciales privadas de servidor.
+- El workflow empaqueta localmente el SDK de Firebase para que el juego pueda cargar sus recursos desde el APK incluso sin conexión.
+
+**Requisito de despliegue:** la autenticación por contraseña usa el backend oficial. Para que las opciones de inicio de sesión que usan OAuth/Google funcionen desde el origen de Android (`appassets.androidplatform.net`), el administrador del proyecto Firebase debe autorizar ese dominio en Authentication → Settings → Authorized domains y comprobar el flujo de redirección. No se intenta eludir esta comprobación. Si no se ha añadido, usa el método de acceso que el administrador haya confirmado compatible.
+
+## Compilar APK con GitHub Actions
+
+1. Sube esta carpeta a tu repositorio GitHub.
+2. Ejecuta **Actions → Build Android APK → Run workflow**.
+3. Descarga el artefacto `PokeSurvivor-Android-debug-apk`.
+
+El workflow descarga la versión actual del juego original, conserva su `js/core/firebase-config.js`, empaqueta el SDK Firebase y añade el origen local seguro de Android a la comprobación interna de host del juego. No hace falta crear el secreto `FIREBASE_CONFIG_JSON` ni configurar un proyecto Firebase propio.
 
 ## Créditos
 
 - Juego original: JPTER78 — https://github.com/JPTER78/pokesurvivor
-- Port Android: JavCombita
+- Port Android e integración: JavCombita
 
-El proyecto utiliza un WebView Android; el motor del juego sigue siendo HTML/CSS/JavaScript y Canvas 2D. Revisa las licencias antes de redistribuirlo. El código del repositorio original se indica bajo MIT, pero los sprites, la fuente y las marcas tienen condiciones propias. Conserva `LICENSE` y `CREDITS.md` del original.
+Se conservan los archivos de licencia y créditos descargados del repositorio original. Consulta la licencia actual del repositorio antes de redistribuir el APK o el código, ya que las condiciones del proyecto pueden cambiar.
 
-## Compilar APK con GitHub Actions
+## Prueba recomendada
 
-1. Sube el contenido de esta carpeta a un repositorio de GitHub.
-2. Abre **Actions** y ejecuta **Build Android APK** (o haz push a `main`/`master`).
-3. Descarga el artefacto `PokeSurvivor-Android-debug-apk` cuando termine el workflow.
+1. Con conexión, inicia sesión con una cuenta oficial y comprueba que el indicador de guardado llegue al estado correcto.
+2. Juega y consigue algún progreso.
+3. Activa el modo avión y continúa jugando.
+4. Recupera la conexión y espera a que termine la sincronización.
+5. Abre la misma cuenta en la web oficial para verificar que el progreso se haya fusionado.
 
-El workflow descarga la versión actual del repositorio original durante la compilación y la empaqueta para el modo offline. El modo online utiliza la web pública y requiere conexión.
-
-## Compilar localmente
-
-Requisitos: JDK 17, Android SDK y Gradle compatible con el proyecto.
-
-Coloca una copia del repositorio original dentro de `app/src/main/assets/game/` (debe incluir `index.html`) y ejecuta:
-
-```bash
-gradle assembleDebug
-```
-
-APK: `app/build/outputs/apk/debug/app-debug.apk`.
-
-## Estado
-
-El proyecto está preparado para compilar ambos modos. Después de compilar, prueba Online con conexión y Offline con el dispositivo en modo avión para confirmar el comportamiento en tu dispositivo.
+El ZIP contiene el proyecto y el workflow, no un APK precompilado. La compilación y la sincronización real deben validarse en GitHub Actions y en un dispositivo.
