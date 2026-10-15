@@ -1,90 +1,51 @@
+
 name: Build Android APK
 
 on:
   workflow_dispatch:
   push:
-    branches: [ main, master ]
+    paths:
+      - 'android-app/**'
+      - '.github/workflows/android.yml'
 
 permissions:
   contents: read
 
 jobs:
   build:
+    name: Compile debug APK
     runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout Android port
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up JDK
+      - name: Set up Java 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
 
-      - name: Setup Android SDK
+      - name: Set up Android SDK
         uses: android-actions/setup-android@v3
         with:
           packages: platform-tools
 
-      - name: Download original game source
-        run: |
-          mkdir -p app/src/main/assets/game
-          curl -fL https://codeload.github.com/JPTER78/pokesurvivor/zip/refs/heads/main -o /tmp/original.zip
-          mkdir -p /tmp/original
-          unzip -q /tmp/original.zip -d /tmp/original
-          SRC="$(find /tmp/original -mindepth 1 -maxdepth 1 -type d | head -n 1)"
-          test -f "$SRC/index.html"
-          cp -a "$SRC"/. app/src/main/assets/game/
+      - name: Install Android SDK packages
+        run: sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0"
 
-      - name: Configure local Firebase SDK and Android origin
-        env:
-          FIREBASE_CONFIG_JSON: ${{ secrets.FIREBASE_CONFIG_JSON }}
-        run: |
-          mkdir -p app/src/main/assets/game/js/vendor/firebase/13.0.0
-          for file in firebase-app-compat.js firebase-auth-compat.js firebase-firestore-compat.js firebase-database-compat.js; do
-            curl -fLsS "https://www.gstatic.com/firebasejs/13.0.0/$file" \
-              -o "app/src/main/assets/game/js/vendor/firebase/13.0.0/$file"
-          done
-          python3 - <<'PY'
-          import json, os, re
-          from pathlib import Path
-          game = Path('app/src/main/assets/game')
-          db = game / 'js/core/db.js'
-          source = db.read_text(encoding='utf-8')
-          source, sdk_count = re.subn(
-              r"const SDK = ['\"][^'\"]*firebasejs/13\.0\.0/['\"];",
-              "const SDK = 'js/vendor/firebase/13.0.0/';",
-              source, count=1)
-          if sdk_count != 1:
-              raise SystemExit('No se encontró la ruta del SDK Firebase esperada en db.js')
-          source, host_count = re.subn(
-              r"const HOSTS = \[([^\]]*)\];",
-              lambda m: "const HOSTS = [" + m.group(1) + (", 'appassets.androidplatform.net'" if 'appassets.androidplatform.net' not in m.group(1) else '') + "];",
-              source, count=1)
-          if host_count != 1:
-              raise SystemExit('No se encontró la lista de dominios permitidos en db.js')
-          db.write_text(source, encoding='utf-8')
-
-          raw = os.environ.get('FIREBASE_CONFIG_JSON', '').strip()
-          config_file = game / 'js/core/firebase-config.js'
-          if raw:
-              config = json.loads(raw)
-              for field in ('apiKey', 'authDomain', 'projectId', 'appId'):
-                  if not config.get(field):
-                      raise SystemExit('FIREBASE_CONFIG_JSON debe incluir ' + field)
-              config_file.write_text('G.FIREBASE_CONFIG = ' + json.dumps(config, ensure_ascii=False) + ';\n', encoding='utf-8')
-              print('Configuración Firebase propia aplicada: la sincronización en nube está habilitada.')
-          else:
-              config_file.write_text('G.FIREBASE_CONFIG = null;\n', encoding='utf-8')
-              print('FIREBASE_CONFIG_JSON no está configurado: el juego funcionará localmente, sin sincronización en nube.')
-          PY
+      - name: Set up Gradle 8.9
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
 
       - name: Build debug APK
-        run: gradle --no-daemon assembleDebug
+        run: gradle -p android-app --no-daemon assembleDebug
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: PokeSurvivor-Android-debug-apk
-          path: app/build/outputs/apk/debug/app-debug.apk
+          name: PokeSurvivor-Offline-debug-apk
+          path: android-app/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
+          retention-days: 14
