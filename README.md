@@ -2,43 +2,53 @@
 
 Port Android del juego original de JPTER78: https://github.com/JPTER78/pokesurvivor
 
-## Integración con el juego original
+## Interfaz integrada
 
-La aplicación abre directamente los archivos originales dentro de un WebView seguro. No añade pantallas de inicio ni menús Android independientes: el acceso, registro, ajustes, pausa y opciones son los del juego.
+La app abre directamente el juego incluido en el APK. No añade un selector de modo, pantallas de inicio nativas ni menús Android propios: el acceso, registro, ajustes, pausa y demás opciones utilizan los menús HTML/CSS originales de PokéSurvivor.
 
-## Cuenta oficial y sincronización
+## Juego offline y sincronización automática
 
-Esta compilación conserva la configuración Firebase pública incluida en el repositorio original de PokéSurvivor. No crea un proyecto Firebase propio ni cambia el identificador del proyecto, por lo que utiliza el backend oficial autorizado por el autor.
+- El juego y sus recursos se empaquetan dentro del APK; no necesita descargar la web para arrancar.
+- El guardado local se conserva en el dispositivo.
+- Para sincronizar, debes crear una cuenta o iniciar sesión desde el menú original del juego. Sin iniciar sesión, el progreso permanece local y no se sube a la nube. Con Firebase configurado, tras iniciar sesión una vez con conexión, la sesión y la copia local permiten seguir jugando sin Internet.
+- Los cambios hechos sin conexión quedan en la copia local. Al recuperar la conexión, el juego reintenta la sincronización automáticamente y fusiona los datos con la nube según la lógica de guardado del juego.
+- Para crear la cuenta por primera vez, iniciar sesión por primera vez o recuperar una cuenta sin sesión/copia local se necesita Internet.
+- Si no configuras Firebase, la app sigue funcionando offline y las cuentas/partidas sólo se guardan en el dispositivo; no habrá sincronización en la nube.
 
-- Inicia sesión o crea una cuenta desde el menú original del juego para usar la nube.
-- La partida se guarda localmente para poder continuar sin conexión.
-- Al recuperar la conexión, el juego vuelve a sincronizar y aplica la lógica de fusión original.
-- La configuración Firebase y las reglas de seguridad son las del proyecto original; no se incluyen credenciales privadas de servidor.
-- El workflow empaqueta localmente el SDK de Firebase para que el juego pueda cargar sus recursos desde el APK incluso sin conexión.
+## Activar la sincronización en la nube
 
-**Requisito de despliegue:** la autenticación por contraseña usa el backend oficial. Para que las opciones de inicio de sesión que usan OAuth/Google funcionen desde el origen de Android (`appassets.androidplatform.net`), el administrador del proyecto Firebase debe autorizar ese dominio en Authentication → Settings → Authorized domains y comprobar el flujo de redirección. No se intenta eludir esta comprobación. Si no se ha añadido, usa el método de acceso que el administrador haya confirmado compatible.
+Por seguridad y para no utilizar la base de datos del autor original, esta compilación no usa las credenciales Firebase de JPTER78. Configura un proyecto Firebase propio. Las cuentas creadas en ese proyecto serán para esta compilación y **no se sincronizan con las cuentas de la web oficial** `pokesurvivor.com` salvo que el autor autorice expresamente la integración con su backend.
+
+1. Crea un proyecto en https://console.firebase.google.com.
+2. En **Authentication → Sign-in method**, activa **Email/Password**.
+3. Crea **Cloud Firestore** en modo producción y publica las reglas de seguridad del juego original: https://github.com/JPTER78/pokesurvivor/blob/main/firestore.rules. Revisa las reglas antes de publicarlas en tu propio proyecto.
+4. Registra una aplicación web en la configuración del proyecto Firebase y copia su configuración.
+5. En **Authentication → Settings → Authorized domains**, añade `appassets.androidplatform.net` a los dominios autorizados.
+6. En tu repositorio GitHub, entra en **Settings → Secrets and variables → Actions → New repository secret**. Nombre: `FIREBASE_CONFIG_JSON`. Valor: el objeto JSON de configuración de Firebase en una sola línea, por ejemplo:
+
+   `{"apiKey":"...","authDomain":"mi-proyecto.firebaseapp.com","projectId":"mi-proyecto","storageBucket":"mi-proyecto.firebasestorage.app","messagingSenderId":"123","appId":"1:123:web:abc"}`
+
+   No incluyas claves privadas de servidor ni cuentas de servicio. La configuración web de Firebase se incorpora al APK y no es un secreto; la seguridad depende de Authentication y de las reglas de Firestore.
+7. Vuelve a ejecutar **Actions → Build Android APK → Run workflow**. En el log de compilación debe aparecer `la sincronización en nube está habilitada`.
+
+La sincronización de partidas utiliza Firestore. Si más adelante quieres activar funciones de red que usen Realtime Database, configura también esa base de datos y añade `databaseURL` al mismo JSON; aplica las reglas correspondientes antes de habilitarla.
 
 ## Compilar APK con GitHub Actions
 
-1. Sube esta carpeta a tu repositorio GitHub.
-2. Ejecuta **Actions → Build Android APK → Run workflow**.
-3. Descarga el artefacto `PokeSurvivor-Android-debug-apk`.
+1. Sube esta carpeta a un repositorio GitHub.
+2. Configura `FIREBASE_CONFIG_JSON` siguiendo los pasos anteriores para habilitar la nube (opcional si sólo quieres jugar localmente).
+3. Ejecuta **Actions → Build Android APK → Run workflow**.
+4. Descarga el artefacto `PokeSurvivor-Android-debug-apk`.
 
-El workflow descarga la versión actual del juego original, conserva su `js/core/firebase-config.js`, empaqueta el SDK Firebase y añade el origen local seguro de Android a la comprobación interna de host del juego. No hace falta crear el secreto `FIREBASE_CONFIG_JSON` ni configurar un proyecto Firebase propio.
+El workflow descarga la versión actual del juego original, empaqueta sus archivos, añade el SDK de Firebase localmente para que el juego pueda inicializarse también sin conexión y adapta la comprobación de origen para el WebView seguro de Android.
 
-## Créditos
+## Créditos y licencias
 
 - Juego original: JPTER78 — https://github.com/JPTER78/pokesurvivor
 - Port Android e integración: JavCombita
 
-Se conservan los archivos de licencia y créditos descargados del repositorio original. Consulta la licencia actual del repositorio antes de redistribuir el APK o el código, ya que las condiciones del proyecto pueden cambiar.
+El motor sigue siendo HTML/CSS/JavaScript y Canvas 2D dentro de WebView. Conserva `LICENSE` y `CREDITS.md` del proyecto original. El código original está bajo MIT, pero los sprites, fuentes y marcas tienen sus propias condiciones.
 
-## Prueba recomendada
+## Estado
 
-1. Con conexión, inicia sesión con una cuenta oficial y comprueba que el indicador de guardado llegue al estado correcto.
-2. Juega y consigue algún progreso.
-3. Activa el modo avión y continúa jugando.
-4. Recupera la conexión y espera a que termine la sincronización.
-5. Abre la misma cuenta en la web oficial para verificar que el progreso se haya fusionado.
-
-El ZIP contiene el proyecto y el workflow, no un APK precompilado. La compilación y la sincronización real deben validarse en GitHub Actions y en un dispositivo.
+El proyecto incluye el código para la sincronización automática y conserva la interfaz original del juego. Para activar la nube debes configurar tu propio Firebase y publicar sus reglas. No he podido validar una cuenta real ni compilar el APK desde este entorno. Prueba el APK en un dispositivo: crea una cuenta conectado, juega, activa el modo avión, avanza, vuelve a conectar y comprueba que el indicador de sincronización del juego termine en estado correcto.
