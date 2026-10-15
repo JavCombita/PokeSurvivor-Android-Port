@@ -1,11 +1,13 @@
-
 name: Build Android APK
 
 on:
   workflow_dispatch:
   push:
     paths:
-      - 'android-app/**'
+      - '**/*.gradle'
+      - '**/*.gradle.kts'
+      - '**/gradlew'
+      - '**/gradle-wrapper.properties'
       - '.github/workflows/android.yml'
 
 permissions:
@@ -13,7 +15,7 @@ permissions:
 
 jobs:
   build:
-    name: Compile debug APK
+    name: Build debug APK
     runs-on: ubuntu-latest
 
     steps:
@@ -21,7 +23,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Set up Java 17
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '17'
@@ -29,23 +31,53 @@ jobs:
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
         with:
-          packages: platform-tools
+          packages: 'platform-tools platforms;android-35 build-tools;35.0.0'
+          accept-android-sdk-licenses: true
+
+      - name: Locate Android Gradle project
+        id: project
+        shell: bash
+        run: |
+          SETTINGS_FILE="$(find . -type f \( -name settings.gradle -o -name settings.gradle.kts \) -not -path './.git/*' -print -quit)"
+          if [ -z "$SETTINGS_FILE" ]; then
+            echo "ERROR: No se encontró settings.gradle ni settings.gradle.kts en el repositorio. Sube el proyecto Android completo (incluidos settings.gradle y el módulo app) antes de compilar." >&2
+            echo "Archivos en la raíz:" >&2
+            ls -la >&2
+            exit 1
+          fi
+          PROJECT_DIR="$(dirname "$SETTINGS_FILE")"
+          echo "dir=$PROJECT_DIR" >> "$GITHUB_OUTPUT"
+          echo "Proyecto Gradle detectado en: $PROJECT_DIR"
+          find "$PROJECT_DIR" -maxdepth 3 -type f \( -name build.gradle -o -name build.gradle.kts \) -print
 
       - name: Install Android SDK packages
-        run: sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0"
+        run: sdkmanager --install "platform-tools" "platforms;android-35" "build-tools;35.0.0"
 
-      - name: Set up Gradle 8.9
+      - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
 
       - name: Build debug APK
-        run: gradle -p android-app --no-daemon assembleDebug
+        run: gradle -p "${{ steps.project.outputs.dir }}" --no-daemon assembleDebug
 
-      - name: Upload APK
+      - name: Find APK
+        id: apk
+        shell: bash
+        run: |
+          APK_PATH="$(find "${{ steps.project.outputs.dir }}" -type f -path '*/build/outputs/apk/debug/*.apk' -print -quit)"
+          if [ -z "$APK_PATH" ]; then
+            echo "ERROR: La compilación terminó sin encontrar un APK debug." >&2
+            exit 1
+          fi
+          mkdir -p dist
+          cp "$APK_PATH" dist/PokeSurvivor-debug.apk
+          echo "path=dist/PokeSurvivor-debug.apk" >> "$GITHUB_OUTPUT"
+
+      - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: PokeSurvivor-Offline-debug-apk
-          path: android-app/app/build/outputs/apk/debug/app-debug.apk
+          path: dist/PokeSurvivor-debug.apk
           if-no-files-found: error
           retention-days: 14
