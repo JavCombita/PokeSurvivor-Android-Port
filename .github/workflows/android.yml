@@ -35,12 +35,42 @@ jobs:
           SRC="$(find /tmp/original -mindepth 1 -maxdepth 1 -type d | head -n 1)"
           test -f "$SRC/index.html"
           cp -a "$SRC"/. app/src/main/assets/game/
-          test -f app/src/main/assets/game/LICENSE || true
-          test -f app/src/main/assets/game/CREDITS.md || true
+
+      - name: Prepare official cloud sync for Android WebView
+        run: |
+          mkdir -p app/src/main/assets/game/js/vendor/firebase/13.0.0
+          for file in firebase-app-compat.js firebase-auth-compat.js firebase-firestore-compat.js firebase-database-compat.js; do
+            curl -fLsS "https://www.gstatic.com/firebasejs/13.0.0/$file" \
+              -o "app/src/main/assets/game/js/vendor/firebase/13.0.0/$file"
+          done
+          python3 - <<'PYCODE'
+          import re
+          from pathlib import Path
+          game = Path('app/src/main/assets/game')
+          db = game / 'js/core/db.js'
+          cfg = game / 'js/core/firebase-config.js'
+          source = db.read_text(encoding='utf-8')
+          config = cfg.read_text(encoding='utf-8')
+          if 'G.FIREBASE_CONFIG = null' in config or 'G.FIREBASE_CONFIG = {' not in config:
+              raise SystemExit('El repositorio original no incluye una configuración Firebase activa; se cancela para no compilar sin sincronización oficial.')
+          source, sdk_count = re.subn(
+              r"const SDK = ['\"]https://www\.gstatic\.com/firebasejs/13\.0\.0/['\"];",
+              "const SDK = 'js/vendor/firebase/13.0.0/';",
+              source, count=1)
+          if sdk_count != 1:
+              raise SystemExit('No se encontró la ruta del SDK Firebase esperada en db.js')
+          source, host_count = re.subn(
+              r"const HOSTS = \[([^\]]*)\];",
+              lambda m: "const HOSTS = [" + m.group(1) + (", 'appassets.androidplatform.net'" if 'appassets.androidplatform.net' not in m.group(1) else '') + "];",
+              source, count=1)
+          if host_count != 1:
+              raise SystemExit('No se encontró la lista de dominios permitidos en db.js')
+          db.write_text(source, encoding='utf-8')
+          print('Configuración oficial de PokéSurvivor conservada; SDK local y origen Android preparados.')
+          PYCODE
 
       - name: Build debug APK
-        run: |
-          gradle --no-daemon assembleDebug
+        run: gradle --no-daemon assembleDebug
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
